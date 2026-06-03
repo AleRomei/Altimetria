@@ -1,9 +1,9 @@
 import streamlit as st
 import re
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from geopy.distance import geodesic
 
 # Configurazione pagina Streamlit
 st.set_page_config(page_title="Generatore Profilo Altimetrico", layout="wide")
@@ -11,15 +11,29 @@ st.set_page_config(page_title="Generatore Profilo Altimetrico", layout="wide")
 st.title("🏔️ Generatore di Profili Altimetrici con Pendenze")
 st.write("Carica il tuo file GPX, scegli un titolo e genera il tuo grafico personalizzato allungato!")
 
-# Elementi dell'interfaccia utente nella barra laterale o principale
+# Elementi dell'interfaccia utente
 titolo_utente = st.text_input("Inserisci il titolo del grafico:", "Il mio percorso")
 file_caricato = st.file_uploader("Scegli un file .gpx", type=["gpx"])
 
+# Funzione nativa per calcolare la distanza tra due coordinate (Formula dell'Aversine)
+def calcola_distanza_haversine(lat1, lon1, lat2, lon2):
+    R = 6371000.0  # Raggio della Terra in metri
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    
+    a = math.sin(delta_phi / 2.0) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return R * c
+
 if file_caricato is not None:
-    # Lettura e decodifica del file GPX caricato dall'utente
+    # Lettura del file GPX caricato
     contenuto_testo = file_caricato.getvalue().decode('utf-8', errors='ignore')
     
-    # Estrazione dati con RegEx
+    # Estrazione dati con RegEx (immuni a errori XML)
     trkpt_blocks = re.findall(r'<trkpt(.*?)</trkpt>', contenuto_testo, re.DOTALL)
     
     points = []
@@ -35,25 +49,28 @@ if file_caricato is not None:
             points.append((lat, lon, ele))
             
     if not points:
-        st.error("Errore: Non è stato possibile estrarre i dati dal file GPX. Controlla il formato.")
+        st.error("Errore: Non è stato possibile estrarre i dati dal file GPX. Controlla che il file contenga punti di traccia.")
     else:
-        # Calcoli geodetici e pendenze
+        # Calcoli di distanza e pendenze
         distances = [0.0]
         elevations = [points[0][2]]
         slopes = [0.0]
         
         for i in range(1, len(points)):
-            pt1 = (points[i-1][0], points[i-1][1])
-            pt2 = (points[i][0], points[i][1])
-            dist = geodesic(pt1, pt2).meters
+            lat1, lon1, ele1 = points[i-1]
+            lat2, lon2, ele2 = points[i]
+            
+            # Uso della nostra funzione matematica nativa
+            dist = calcola_distanza_haversine(lat1, lon1, lat2, lon2)
             
             distances.append(distances[-1] + dist / 1000.0)
-            elevations.append(points[i][2])
+            elevations.append(ele2)
             
-            ele_diff = points[i][2] - points[i-1][2]
+            ele_diff = ele2 - ele1
             slope = (ele_diff / dist) * 100.0 if dist > 0 else 0.0
             slopes.append(slope)
             
+        # Filtro per ammorbidire i picchi del GPS
         slopes_smooth = np.convolve(slopes, np.ones(9)/9, mode='same')
         
         # Generazione Grafico Matplotlib (Proporzioni allungate 24x6)
@@ -91,8 +108,8 @@ if file_caricato is not None:
         # Mostra il grafico nell'applicazione Web
         st.pyplot(fig)
         
-        # Statistiche veloci sotto il grafico
+        # Statistiche sotto il grafico
         col1, col2, col3 = st.columns(3)
         col1.metric("Distanza Totale", f"{distances[-1]:.2f} km")
         col2.metric("Quota Massima", f"{int(max(elevations))} m")
-        col3.metric("Quota Minima", f"{int(min(min(elevations)))} m")
+        col3.metric("Quota Minima", f"{int(min(elevations))} m")
