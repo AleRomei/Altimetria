@@ -9,7 +9,7 @@ import matplotlib.colors as mcolors
 st.set_page_config(page_title="Generatore Profilo Altimetrico", layout="wide")
 
 st.title("🏔️ Generatore di Profili Altimetrici con Pendenze")
-st.write("Carica il tuo file GPX, scegli un titolo e genera il tuo grafico personalizzato allungato!")
+st.write("Carica il tuo file GPX, scegli un titolo e genera il tuo grafico!")
 
 # Elementi dell'interfaccia utente
 titolo_utente = st.text_input("Inserisci il titolo del grafico:", "Il mio percorso")
